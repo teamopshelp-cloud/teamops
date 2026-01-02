@@ -46,11 +46,14 @@ export default function WorkSession() {
     isWorkEndAlertActive,
     submitLeaveRequest,
     dismissBreakAlert,
-    dismissWorkEndAlert
+    dismissWorkEndAlert,
+    isLoading
   } = useWorkTime();
 
   // Start Time Blocking Check
   useEffect(() => {
+    if (isLoading) return;
+
     const checkStartTime = () => {
       const now = new Date();
       const current = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -64,7 +67,7 @@ export default function WorkSession() {
     checkStartTime();
     const interval = setInterval(checkStartTime, 60000);
     return () => clearInterval(interval);
-  }, [config.workStartTime]);
+  }, [config.workStartTime, isLoading]);
 
   // Timer for work session
   useEffect(() => {
@@ -191,10 +194,6 @@ export default function WorkSession() {
         description: activeBreakReason ? `Global Break: ${activeBreakReason}` : 'Manager has started a global break.',
       });
     } else if (globalMode === 'working' && status === 'break') {
-      // Only auto-resume if it was a global break? 
-      // Current requirement: "Automatically resuming timers when a break ends"
-      // If global mode goes back to working, we assume break is over.
-      // Ideally we check if "local break" was also manual, but for now we follow global signal.
       if (!activeBreakReason) { // If reason cleared, it means global break ended
         setStatus('working');
         toast({
@@ -213,33 +212,32 @@ export default function WorkSession() {
 
   const getStatusColor = () => {
     switch (status) {
-      case 'working':
-        return 'bg-success';
-      case 'break':
-        return 'bg-warning';
-      case 'ended':
-        return 'bg-muted-foreground';
-      default:
-        return 'bg-muted-foreground';
+      case 'working': return 'bg-success';
+      case 'break': return 'bg-warning';
+      case 'ended': return 'bg-muted-foreground';
+      default: return 'bg-muted-foreground';
     }
   };
 
   const getStatusText = () => {
     switch (status) {
-      case 'working':
-        return 'Working';
-      case 'break':
-        return 'On Break';
-      case 'ended':
-        return 'Session Ended';
-      default:
-        return 'Not Started';
+      case 'working': return 'Working';
+      case 'break': return 'On Break';
+      case 'ended': return 'Session Ended';
+      default: return 'Not Started';
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <ProtectedLayout>
-
       <div className="space-y-6">
         {/* Break Time Alert */}
         {isBreakAlertActive && status === 'working' && (

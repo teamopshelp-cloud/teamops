@@ -54,6 +54,7 @@ interface WorkTimeContextType {
   dismissBreakAlert: () => void;
   dismissWorkEndAlert: () => void;
   refreshConfig: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const defaultConfig: WorkTimeConfig = {
@@ -77,9 +78,14 @@ export function WorkTimeProvider({ children }: { children: ReactNode }) {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeWorkStatus[]>([]);
 
+  const [isLoading, setIsLoading] = useState(true);
+
   // Fetch initial config and status
   const fetchConfigAndStatus = useCallback(async () => {
-    if (!user?.companyId) return;
+    if (!user?.companyId) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -96,13 +102,15 @@ export function WorkTimeProvider({ children }: { children: ReactNode }) {
           workEndTime: (data as any).work_end_time || '18:00',
           breakStartTime: (data as any).lunch_start_time || '12:00',
           breakEndTime: (data as any).break_end_time || '13:00',
-          autoBreakEnabled: true, // Assuming true or add column for this
+          autoBreakEnabled: true,
         });
         setGlobalModeState((data as any).current_work_status || 'idle');
         setActiveBreakReason((data as any).active_break_reason || null);
       }
     } catch (error) {
       console.error('Error fetching work time config:', error);
+    } finally {
+      setIsLoading(false);
     }
   }, [user?.companyId]);
 
@@ -212,19 +220,28 @@ export function WorkTimeProvider({ children }: { children: ReactNode }) {
       if (newConfig.breakStartTime) updates.lunch_start_time = newConfig.breakStartTime;
       if (newConfig.breakEndTime) updates.break_end_time = newConfig.breakEndTime;
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('companies')
         .update(updates)
-        .eq('id', user.companyId);
+        .eq('id', user.companyId)
+        .select();
 
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error('Permission denied: You do not have permission to update company settings.');
+      }
 
       // Optimistic update
       setConfig(prev => ({ ...prev, ...newConfig }));
       toast({ title: 'Settings Updated', description: 'Work time settings saved.' });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast({ title: 'Error', description: 'Failed to update settings', variant: 'destructive' });
+      toast({
+        title: 'Update Failed',
+        description: e.message || 'Failed to update settings',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -310,7 +327,8 @@ export function WorkTimeProvider({ children }: { children: ReactNode }) {
         rejectLeaveRequest,
         dismissBreakAlert,
         dismissWorkEndAlert,
-        refreshConfig
+        refreshConfig,
+        isLoading
       }}
     >
       {children}

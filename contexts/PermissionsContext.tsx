@@ -291,25 +291,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (!user?.companyId) return;
 
     try {
-      // Delete existing permissions for this role
-      await (supabase
-        .from('permissions')
+      // Delete existing permissions for this custom role
+      const { error: deleteError } = await supabase
+        .from('custom_role_permissions')
         .delete()
-        .eq('company_id', user.companyId)
-        .eq('role', roleId as AppRole) as any);
+        .eq('role_id', roleId);
+
+      if (deleteError) throw deleteError;
 
       // Insert new permissions
       if (permissions.length > 0) {
         const permData = permissions.map(perm => ({
-          company_id: user.companyId!,
-          role: roleId as AppRole,
+          role_id: roleId,
           permission_key: perm,
         }));
-        const { error } = await (supabase
-          .from('permissions')
-          .insert(permData as any) as any);
 
-        if (error) throw error;
+        const { error: insertError } = await supabase
+          .from('custom_role_permissions')
+          .insert(permData);
+
+        if (insertError) throw insertError;
       }
 
       // Update local state
